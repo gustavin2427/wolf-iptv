@@ -1,6 +1,13 @@
 {
   "filmes": [
     {
+      "titulo": "The Cycle [L]",
+      "ano": 2026,
+      "categoria": "Legendados",
+      "capa": "http://lgfp.one/XGQ4",
+      "video": "http://rbpfs.xyz:80/movie/wander4423/44234423wa/440041.mp4"
+    },
+    {
       "titulo": "A Morte do Demônio em Chamas",
       "ano": 2026,
       "categoria": "Terror",
