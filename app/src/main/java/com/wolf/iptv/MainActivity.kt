@@ -81,7 +81,7 @@ data class Serie(
 class MainActivity : AppCompatActivity() {
 
     private val BASE_URL =
-        "https://raw.githubusercontent.com/tavin25psp-byte/wolf-iptv/main/"
+        "https://raw.githubusercontent.com/gustavin2427/wolf-iptv/main/"
 
     private val CATALOGO_URL = BASE_URL + "catalogo.json"
     private val CANAIS_URL = BASE_URL + "canais.json"
