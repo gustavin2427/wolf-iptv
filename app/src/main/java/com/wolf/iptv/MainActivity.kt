@@ -3128,9 +3128,9 @@ class MainActivity : AppCompatActivity() {
                     if (w <= 0 || h <= 0) return
                     val escala = maxOf(w.toFloat() / pronto.width, h.toFloat() / pronto.height)
                     val ty = (h / 2f - 0.40f * pronto.height * escala)
-                        .coerceIn(h - pronto.height * escala, 0f)
+                        .coerceIn(minOf(h - pronto.height * escala, 0f), 0f)
                     val tx = (-0.04f * pronto.width * escala)
-                        .coerceIn(w - pronto.width * escala, 0f)
+                        .coerceIn(minOf(w - pronto.width * escala, 0f), 0f)
                     val m = android.graphics.Matrix()
                     m.postScale(escala, escala)
                     m.postTranslate(tx, ty)
