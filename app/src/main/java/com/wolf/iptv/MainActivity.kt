@@ -4343,7 +4343,7 @@ class MainActivity : AppCompatActivity() {
             setTextColor(Color.rgb(12, 0, 0))
             textSize = 24f
             typeface = Typeface.create("sans-serif-black", Typeface.BOLD_ITALIC)
-            textSkewX = -0.2f
+            paint.textSkewX = -0.2f
             letterSpacing = 0.06f
             gravity = Gravity.CENTER
             setPadding(dp(48), dp(2), dp(48), dp(2))
