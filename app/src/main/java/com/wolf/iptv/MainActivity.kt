@@ -155,13 +155,15 @@ class MainActivity : AppCompatActivity() {
     }
     // Fila "o último que chegou sai primeiro": as capas que estão na tela agora
     // passam na frente das que já saíram da tela.
-    private val executorImagens: java.util.concurrent.ExecutorService =
+    private val executorImagens: java.util.concurrent.ExecutorService by lazy {
+        val n = if (ehTv) 3 else 8
         java.util.concurrent.ThreadPoolExecutor(
-            8, 8, 30L, java.util.concurrent.TimeUnit.SECONDS,
+            n, n, 30L, java.util.concurrent.TimeUnit.SECONDS,
             object : java.util.concurrent.LinkedBlockingDeque<Runnable>() {
                 override fun offer(e: Runnable): Boolean = offerFirst(e)
             }
         )
+    }
 
     private val pastaCacheImagens: File by lazy {
         File(filesDir, "wolf_imagens").apply {
@@ -237,9 +239,11 @@ class MainActivity : AppCompatActivity() {
         compacto = !tv && larguraDp < 600
         colunasInicio = when { compacto -> 3; larguraDp < 900 -> 5; else -> 9 }
 
-        System.setProperty("http.maxConnections", "16")
+        System.setProperty("http.maxConnections", if (ehTv) "6" else "16")
         favoritos.addAll(prefsWolf.getStringSet("favoritos", emptySet()) ?: emptySet())
-        executorPrecarga.execute { podarCacheImagens() }
+        executorPrecarga.execute {
+            podarCacheImagens(if (ehTv) 250L * 1024 * 1024 else 700L * 1024 * 1024)
+        }
 
         criarInterface()
 
@@ -259,7 +263,7 @@ class MainActivity : AppCompatActivity() {
         activityScope.launch {
             var ciclo = 0
             while (true) {
-                delay(120_000L)
+                delay(if (ehTv) 600_000L else 120_000L)
                 if (!noPrimeiroPlano) continue
                 ciclo++
                 if (catalogoIniciado) verificarNovidades()
@@ -1535,7 +1539,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private val aguardandoImagem = HashMap<String, MutableList<ImageView>>()
-    private val executorPrecarga = Executors.newFixedThreadPool(4)
+    private val executorPrecarga by lazy { Executors.newFixedThreadPool(if (ehTv) 2 else 4) }
 
     private val travasCapas = ConcurrentHashMap<String, Any>()
 
@@ -1635,8 +1639,9 @@ class MainActivity : AppCompatActivity() {
         imagem.tag = url
 
         val largAlvo = if (larguraAlvo > 0) larguraAlvo
+            else if (ehTv) resources.displayMetrics.widthPixels / colunas.coerceAtLeast(1)
             else (resources.displayMetrics.widthPixels / colunas.coerceAtLeast(1)) * 3 / 2
-        val altAlvo = if (alturaAlvo > 0) alturaAlvo else dp(240) * 3 / 2
+        val altAlvo = if (alturaAlvo > 0) alturaAlvo else if (ehTv) dp(240) else dp(240) * 3 / 2
 
         cacheCapas[url]?.let { bitmap ->
             imagem.setImageBitmap(bitmap)
@@ -1716,7 +1721,7 @@ class MainActivity : AppCompatActivity() {
         val leitura = BitmapFactory.Options()
         leitura.inSampleSize = amostra
         leitura.inPreferredConfig =
-            if (leve) Bitmap.Config.RGB_565 else Bitmap.Config.ARGB_8888
+            if (leve || ehTv) Bitmap.Config.RGB_565 else Bitmap.Config.ARGB_8888
         leitura.inScaled = true
 
         return BitmapFactory.decodeFile(arquivo.absolutePath, leitura)
@@ -1901,16 +1906,19 @@ class MainActivity : AppCompatActivity() {
     private fun carregarCatalogo(forcarRede: Boolean = false) {
         activityScope.launch(Dispatchers.IO) {
             try {
-                // Sempre tenta a versão publicada primeiro, inclusive na TV.
-                // O cache só é usado como alternativa quando a rede falhar.
                 var vindoDoCache = false
-                var respostaTmp: String? = baixarTexto(CATALOGO_URL)
+                var respostaTmp: String? = if (forcarRede) null else lerCacheCatalogo("filmes")
 
-                if (respostaTmp.isNullOrBlank()) {
-                    respostaTmp = lerCacheCatalogo("filmes")
-                    if (respostaTmp != null) vindoDoCache = true
+                if (respostaTmp != null) {
+                    vindoDoCache = true
                 } else {
-                    salvarCacheCatalogo("filmes", respostaTmp)
+                    respostaTmp = baixarTexto(CATALOGO_URL)
+                    if (respostaTmp.isNullOrBlank()) {
+                        respostaTmp = lerCacheCatalogo("filmes")
+                        if (respostaTmp != null) vindoDoCache = true
+                    } else {
+                        salvarCacheCatalogo("filmes", respostaTmp)
+                    }
                 }
 
                 if (respostaTmp.isNullOrBlank()) {
@@ -1920,8 +1928,10 @@ class MainActivity : AppCompatActivity() {
                 val cacheUsado = vindoDoCache
 
                 fun textoDe(nome: String, arquivos: List<String>): String? {
-                    // Não deixa um cache antigo substituir a lista atual do servidor.
-                    // Baixa primeiro; usa o arquivo local somente se não houver rede.
+                    if (cacheUsado) {
+                        val salvo = lerCacheCatalogo(nome)
+                        if (salvo != null) return salvo
+                    }
                     val baixado = baixarPrimeiro(arquivos)
                     if (!baixado.isNullOrBlank()) {
                         salvarCacheCatalogo(nome, baixado)
@@ -2098,7 +2108,7 @@ class MainActivity : AppCompatActivity() {
                     esconderSplash()
 
                     // Só o começo de cada categoria (o resto baixa quando aparecer na tela)
-                    precarregarCapas(
+                    precarregarCapas((
                         filmes.take(40).map { it.capa } +
                             desenhos.take(20).map { it.capa } +
                             desenhosSeries.take(20).map { it.capa } +
@@ -2112,7 +2122,7 @@ class MainActivity : AppCompatActivity() {
                             doramas.take(40).map { it.capa } +
                             novelas.take(40).map { it.capa } +
                             animes.take(40).map { it.capa }
-                    )
+                    ).let { l -> if (ehTv) l.take(80) else l })
 
                     if (cacheUsado) {
                         verificarNovidades()
