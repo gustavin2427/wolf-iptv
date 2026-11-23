@@ -3128,9 +3128,9 @@ class MainActivity : AppCompatActivity() {
                     if (w <= 0 || h <= 0) return
                     val escala = maxOf(w.toFloat() / pronto.width, h.toFloat() / pronto.height)
                     val ty = (h / 2f - 0.40f * pronto.height * escala)
-                        .coerceIn(minOf(h - pronto.height * escala, 0f), 0f)
+                        .coerceIn(h - pronto.height * escala, 0f)
                     val tx = (-0.04f * pronto.width * escala)
-                        .coerceIn(minOf(w - pronto.width * escala, 0f), 0f)
+                        .coerceIn(w - pronto.width * escala, 0f)
                     val m = android.graphics.Matrix()
                     m.postScale(escala, escala)
                     m.postTranslate(tx, ty)
@@ -4190,29 +4190,51 @@ class MainActivity : AppCompatActivity() {
         ).show()
     }
 
+    private val VERMELHO_SINOPSE = Color.rgb(214, 28, 28)
+
     private fun botaoDetalhe(texto: String, principal: Boolean): TextView {
         val b = TextView(this).apply {
             text = texto
             setTextColor(Color.WHITE)
-            textSize = 16f
+            textSize = if (compacto) 14f else 16f
             typeface = Typeface.DEFAULT_BOLD
             gravity = Gravity.CENTER
             isFocusable = true
             isFocusableInTouchMode = true
             isClickable = true
-            setPadding(dp(24), dp(12), dp(24), dp(12))
+            setPadding(dp(26), dp(12), dp(26), dp(12))
         }
         fun estilo(foco: Boolean) {
-            val g = GradientDrawable().apply {
-                cornerRadius = dp(8).toFloat()
-                setColor(if (principal) Color.rgb(103, 47, 220) else Color.argb(150, 60, 60, 60))
-                if (foco) setStroke(dp(3), Color.WHITE)
+            b.background = GradientDrawable().apply {
+                cornerRadius = dp(28).toFloat()
+                setColor(if (principal) VERMELHO_SINOPSE else Color.argb(160, 18, 18, 18))
+                setStroke(
+                    dp(if (foco) 3 else 1),
+                    if (foco) Color.WHITE
+                    else if (principal) VERMELHO_SINOPSE
+                    else Color.argb(150, 220, 220, 225)
+                )
             }
-            b.background = g
         }
         estilo(false)
         b.setOnFocusChangeListener { _, f -> estilo(f) }
         return b
+    }
+
+    // Deixa em vermelho/negrito os nomes próprios no meio da frase (ex.: México)
+    private fun sinopseDestacada(texto: String): CharSequence {
+        val s = android.text.SpannableString(texto)
+        Regex("(?<=[a-zà-ú,;] )[A-ZÀ-Ú]\\p{L}{2,}").findAll(texto).forEach { m ->
+            s.setSpan(
+                android.text.style.ForegroundColorSpan(VERMELHO_SINOPSE),
+                m.range.first, m.range.last + 1, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+            s.setSpan(
+                android.text.style.StyleSpan(Typeface.BOLD),
+                m.range.first, m.range.last + 1, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+            )
+        }
+        return s
     }
 
     private fun mostrarDetalhes(
@@ -4226,70 +4248,126 @@ class MainActivity : AppCompatActivity() {
         aoAssistir: () -> Unit
     ) {
         val dialogo = android.app.Dialog(this, android.R.style.Theme_Black_NoTitleBar_Fullscreen)
-        val raizD = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
+        val dm = resources.displayMetrics
+        val larg = dm.widthPixels
+        val alt = dm.heightPixels
+        val paisagem = larg > alt
+        val vermelho = VERMELHO_SINOPSE
+        val preto = Color.rgb(5, 4, 4)
 
-        val fundo = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.CENTER_CROP
-            alpha = 0.30f
+        val raizD = FrameLayout(this).apply { setBackgroundColor(preto) }
+
+        // ── Arte (capa) ocupando o lado esquerdo (ou o topo, em pé) ──
+        val larguraArte = if (paisagem) (larg * 0.60f).toInt() else -1
+        val alturaArte = if (paisagem) -1 else (alt * 0.46f).toInt()
+        val arte = ImageView(this).apply { scaleType = ImageView.ScaleType.CENTER_CROP }
+        carregarImagem(capa, arte, larg, alt, false)
+        raizD.addView(arte, FrameLayout.LayoutParams(larguraArte, alturaArte, Gravity.TOP or Gravity.START))
+
+        // Degradê: a arte some no preto (direita em paisagem, embaixo em pé)
+        raizD.addView(
+            View(this).apply {
+                background = GradientDrawable(
+                    if (paisagem) GradientDrawable.Orientation.LEFT_RIGHT
+                    else GradientDrawable.Orientation.TOP_BOTTOM,
+                    intArrayOf(Color.TRANSPARENT, Color.argb(130, 5, 4, 4), preto)
+                )
+            },
+            FrameLayout.LayoutParams(larguraArte, alturaArte, Gravity.TOP or Gravity.START)
+        )
+        // Escurece levemente topo e base da arte
+        raizD.addView(
+            View(this).apply {
+                background = GradientDrawable(
+                    GradientDrawable.Orientation.TOP_BOTTOM,
+                    intArrayOf(Color.argb(150, 0, 0, 0), Color.TRANSPARENT, Color.argb(170, 0, 0, 0))
+                )
+            },
+            FrameLayout.LayoutParams(larguraArte, alturaArte, Gravity.TOP or Gravity.START)
+        )
+
+        // ── Coluna de texto ──
+        val coluna = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            setPadding(dp(if (paisagem) 28 else 22), dp(18), dp(if (paisagem) 36 else 22), dp(24))
         }
-        carregarImagem(capa, fundo, resources.displayMetrics.widthPixels / 2, resources.displayMetrics.heightPixels / 2, true)
-        raizD.addView(fundo, FrameLayout.LayoutParams(-1, -1))
 
-        val veu = View(this).apply {
-            background = GradientDrawable(
-                GradientDrawable.Orientation.LEFT_RIGHT,
-                intArrayOf(Color.argb(235, 0, 0, 0), Color.argb(120, 0, 0, 0))
-            )
+        // Filete vermelho acima do título
+        coluna.addView(
+            View(this).apply { setBackgroundColor(vermelho) },
+            LinearLayout.LayoutParams(dp(110), dp(4)).apply { bottomMargin = dp(8) }
+        )
+
+        // Título grande
+        val tam = when {
+            titulo.length <= 12 -> if (paisagem) 48f else 36f
+            titulo.length <= 24 -> if (paisagem) 36f else 28f
+            else -> if (paisagem) 28f else 22f
         }
-        raizD.addView(veu, FrameLayout.LayoutParams(-1, -1))
-
-        val paisagem = resources.displayMetrics.widthPixels > resources.displayMetrics.heightPixels
-
-        val poster = ImageView(this).apply {
-            scaleType = ImageView.ScaleType.FIT_CENTER
-            background = GradientDrawable().apply {
-                setColor(Color.argb(120, 24, 22, 36))
-                cornerRadius = dp(12).toFloat()
-            }
-            clipToOutline = true
-        }
-        carregarImagem(capa, poster)
-
-        val coluna = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-
         coluna.addView(TextView(this).apply {
-            text = titulo
+            text = titulo.uppercase(Locale("pt", "BR"))
             setTextColor(Color.WHITE)
-            textSize = if (paisagem) 30f else 24f
-            typeface = Typeface.DEFAULT_BOLD
-        })
+            textSize = tam
+            typeface = Typeface.create("sans-serif-black", Typeface.NORMAL)
+            gravity = Gravity.CENTER
+            maxLines = 3
+            ellipsize = TextUtils.TruncateAt.END
+            setShadowLayer(8f, 0f, 3f, Color.BLACK)
+        }, LinearLayout.LayoutParams(-1, -2))
 
-        coluna.addView(TextView(this).apply {
-            text = meta
-            setTextColor(Color.rgb(120, 55, 255))
-            textSize = 15f
-            typeface = Typeface.DEFAULT_BOLD
-            setPadding(0, dp(6), 0, dp(12))
-        })
+        // 2026 • AÇÃO  (bolinha vermelha)
+        val metaTxt = meta.replace(Regex("\\s*•\\s*"), "  •  ").trim()
+            .uppercase(Locale("pt", "BR"))
+        if (metaTxt.isNotBlank()) {
+            val metaSp = android.text.SpannableString(metaTxt)
+            Regex("•").findAll(metaTxt).forEach { m ->
+                metaSp.setSpan(
+                    android.text.style.ForegroundColorSpan(vermelho),
+                    m.range.first, m.range.last + 1, android.text.Spannable.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+            coluna.addView(TextView(this).apply {
+                text = metaSp
+                setTextColor(Color.WHITE)
+                textSize = 16f
+                typeface = Typeface.DEFAULT_BOLD
+                letterSpacing = 0.05f
+                gravity = Gravity.CENTER
+            }, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(6); bottomMargin = dp(14) })
+        }
 
+        // Faixa vermelha "SINOPSE"
         coluna.addView(TextView(this).apply {
             text = "SINOPSE"
-            setTextColor(Color.rgb(170, 170, 170))
-            textSize = 12f
-            letterSpacing = 0.15f
-            typeface = Typeface.DEFAULT_BOLD
-        })
+            setTextColor(Color.rgb(12, 0, 0))
+            textSize = 24f
+            typeface = Typeface.create("sans-serif-black", Typeface.BOLD_ITALIC)
+            textSkewX = -0.2f
+            letterSpacing = 0.06f
+            gravity = Gravity.CENTER
+            setPadding(dp(48), dp(2), dp(48), dp(2))
+            background = GradientDrawable(
+                GradientDrawable.Orientation.LEFT_RIGHT,
+                intArrayOf(Color.argb(200, 214, 28, 28), vermelho, Color.argb(200, 214, 28, 28))
+            ).apply { cornerRadius = dp(4).toFloat() }
+        }, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = dp(14) })
 
+        // Texto da sinopse
         coluna.addView(TextView(this).apply {
-            text = if (sinopse.isNotBlank()) sinopse else "Sinopse ainda não disponível para este título."
-            setTextColor(Color.rgb(220, 220, 220))
-            textSize = 16f
+            text = if (sinopse.isNotBlank()) sinopseDestacada(sinopse)
+            else "Sinopse ainda não disponível para este título."
+            setTextColor(Color.WHITE)
+            textSize = if (paisagem) 17f else 15f
+            setTypeface(null, Typeface.ITALIC)
+            gravity = Gravity.CENTER
             setLineSpacing(0f, 1.2f)
-        })
+        }, LinearLayout.LayoutParams(-1, -2))
 
+        // Botões
         val botoes = LinearLayout(this).apply {
             orientation = if (paisagem) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-            setPadding(0, dp(24), 0, 0)
+            gravity = Gravity.CENTER
         }
 
         val assistir = botaoDetalhe(
@@ -4304,10 +4382,6 @@ class MainActivity : AppCompatActivity() {
                 aoAssistir()
             }
         }
-        botoes.addView(assistir, LinearLayout.LayoutParams(-2, -2).apply {
-            rightMargin = dp(12)
-            bottomMargin = dp(10)
-        })
 
         fun textoFav() = if (favoritos.contains(titulo)) "★  FAVORITO" else "☆  FAVORITAR"
         val favorito = botaoDetalhe(textoFav(), false)
@@ -4315,35 +4389,35 @@ class MainActivity : AppCompatActivity() {
             alternarFavorito(titulo)
             favorito.text = textoFav()
         }
-        botoes.addView(favorito, LinearLayout.LayoutParams(-2, -2).apply {
-            rightMargin = dp(12)
-            bottomMargin = dp(10)
-        })
 
         val voltar = botaoDetalhe("VOLTAR", false)
         voltar.setOnClickListener { dialogo.dismiss() }
-        botoes.addView(voltar, LinearLayout.LayoutParams(-2, -2).apply { bottomMargin = dp(10) })
 
-        coluna.addView(botoes)
-
-        val conteudoD = LinearLayout(this).apply {
-            orientation = if (paisagem) LinearLayout.HORIZONTAL else LinearLayout.VERTICAL
-            setPadding(dp(40), dp(28), dp(40), dp(28))
+        listOf(assistir, favorito, voltar).forEachIndexed { i, b ->
+            botoes.addView(
+                b,
+                if (paisagem) LinearLayout.LayoutParams(-2, -2).apply {
+                    if (i > 0) leftMargin = dp(10)
+                }
+                else LinearLayout.LayoutParams(-1, -2).apply {
+                    if (i > 0) topMargin = dp(8)
+                }
+            )
         }
+        coluna.addView(botoes, LinearLayout.LayoutParams(-1, -2).apply { topMargin = dp(22) })
 
-        if (paisagem) {
-            conteudoD.addView(poster, LinearLayout.LayoutParams(dp(220), dp(330)).apply { rightMargin = dp(32) })
-        } else {
-            conteudoD.addView(poster, LinearLayout.LayoutParams(dp(160), dp(240)).apply { bottomMargin = dp(16); gravity = Gravity.CENTER_HORIZONTAL })
+        val rolagem = ScrollView(this).apply {
+            isFillViewport = true
+            isVerticalScrollBarEnabled = false
+            addView(coluna, FrameLayout.LayoutParams(-1, -2))
         }
+        // Em pé, o texto começa em cima do degradê da arte
+        raizD.addView(
+            rolagem,
+            if (paisagem) FrameLayout.LayoutParams((larg * 0.46f).toInt(), -1, Gravity.END)
+            else FrameLayout.LayoutParams(-1, -1).apply { topMargin = (alt * 0.32f).toInt() }
+        )
 
-        val rolagem = ScrollView(this).apply { isFillViewport = true }
-        rolagem.addView(coluna)
-        conteudoD.addView(rolagem, LinearLayout.LayoutParams(0, -1, 1f).also {
-            if (!paisagem) { it.width = -1; it.height = 0 }
-        })
-
-        raizD.addView(conteudoD, FrameLayout.LayoutParams(-1, -1))
         dialogo.setContentView(raizD)
         dialogo.show()
         assistir.requestFocus()
