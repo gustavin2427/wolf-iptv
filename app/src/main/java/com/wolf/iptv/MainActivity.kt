@@ -1901,19 +1901,16 @@ class MainActivity : AppCompatActivity() {
     private fun carregarCatalogo(forcarRede: Boolean = false) {
         activityScope.launch(Dispatchers.IO) {
             try {
+                // Sempre tenta a versão publicada primeiro, inclusive na TV.
+                // O cache só é usado como alternativa quando a rede falhar.
                 var vindoDoCache = false
-                var respostaTmp: String? = if (forcarRede) null else lerCacheCatalogo("filmes")
+                var respostaTmp: String? = baixarTexto(CATALOGO_URL)
 
-                if (respostaTmp != null) {
-                    vindoDoCache = true
+                if (respostaTmp.isNullOrBlank()) {
+                    respostaTmp = lerCacheCatalogo("filmes")
+                    if (respostaTmp != null) vindoDoCache = true
                 } else {
-                    respostaTmp = baixarTexto(CATALOGO_URL)
-                    if (respostaTmp.isNullOrBlank()) {
-                        respostaTmp = lerCacheCatalogo("filmes")
-                        if (respostaTmp != null) vindoDoCache = true
-                    } else {
-                        salvarCacheCatalogo("filmes", respostaTmp)
-                    }
+                    salvarCacheCatalogo("filmes", respostaTmp)
                 }
 
                 if (respostaTmp.isNullOrBlank()) {
@@ -1923,10 +1920,8 @@ class MainActivity : AppCompatActivity() {
                 val cacheUsado = vindoDoCache
 
                 fun textoDe(nome: String, arquivos: List<String>): String? {
-                    if (cacheUsado) {
-                        val salvo = lerCacheCatalogo(nome)
-                        if (salvo != null) return salvo
-                    }
+                    // Não deixa um cache antigo substituir a lista atual do servidor.
+                    // Baixa primeiro; usa o arquivo local somente se não houver rede.
                     val baixado = baixarPrimeiro(arquivos)
                     if (!baixado.isNullOrBlank()) {
                         salvarCacheCatalogo(nome, baixado)
